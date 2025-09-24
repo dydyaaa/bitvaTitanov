@@ -1,0 +1,4 @@
+mypy .
+ruff check .
+isort .
+flake8 .
