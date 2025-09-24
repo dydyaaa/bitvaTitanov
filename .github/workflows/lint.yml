@@ -1,6 +1,8 @@
 name: Lint and Type Check
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
 
 jobs:
