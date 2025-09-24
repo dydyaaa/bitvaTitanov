@@ -7,12 +7,18 @@ git clone https://github.com/dydyaaa/bitvaTitanov.git
 ```
 2. Установить зависимости
 
+    py -m venv venv -- если не появилась папка venv, то меняем **py** на **python**
+
 * for mac os:
 ```
+cd .\bitvaTitanov\
+py -m venv venv
 source .venv/bin/activate
 ```
 * for windows
 ```
+cd .\bitvaTitanov\
+py -m venv venv
 .venv\Scripts\Activate.ps1
 ```
 
