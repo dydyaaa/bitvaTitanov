@@ -1,0 +1,333 @@
+import os
+import torch
+import time
+import json
+import shutil
+import chromadb
+from uuid import uuid4
+from collections import defaultdict
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from sentence_transformers import CrossEncoder
+from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+
+
+class RAGService:
+    def __init__(self, model_name: str, chroma_path: str, glossary_json: str):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # 0) Загружаем глоссарий (JSON) один раз
+        self.glossary: dict[str, str] = {}
+        if os.path.exists(glossary_json):
+            with open(glossary_json, "r", encoding="utf-8") as f:
+                self.glossary = json.load(f)
+            print(f"[RAGService] Загружено {len(self.glossary)} терминов из {glossary_json}")
+        else:
+            print(f"[RAGService] Файл глоссария {glossary_json} не найден")
+
+        # 1) Токенизатор и модель с 4‑битным квантованием
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=False,
+            bnb_4bit_quant_type="nf4"
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
+        if self.device == "cuda":
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                device_map="auto",
+                quantization_config=bnb,
+                low_cpu_mem_usage=True,
+                dtype=torch.float16,
+            )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                low_cpu_mem_usage=True,
+                dtype=torch.float32,
+            )
+        self.model.eval()
+
+        # 2) Сплиттер для создания чанков
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            add_start_index=True,
+            separators=["\n\n", "\n", ".", " ", ""]
+        )
+
+        # 3) ChromaDB + эмбеддинги
+        self.embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
+        client = chromadb.PersistentClient(path=chroma_path)
+        self.vectorstore = Chroma(
+            client=client,
+            collection_name="rzd_docs",
+            embedding_function=self.embeddings,
+        )
+        # 4) Cross‑encoder для rerank и фильтрации
+        self.cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2")
+
+        # 5) Системный промпт
+        self.SYSTEM_PROMPT = (
+            "Ты — ассистент по нормативным документам и технической эксплуатации железнодорожного транспорта (РЖД).\n"
+            "Отвечай строго на основе переданных документов (<documents>) и истории (<history>). "
+            "Не привлекай внешние знания и не домысливай факты.\n\n"
+            "Формат ответа:\n"
+            "• Короткий вывод (1–2 предложения).\n"
+            "• Затем структурированные пункты/шаги (по делу, без воды).\n"
+            "• В конце отдельным блоком добавь 'Источники:' — список вида «<Название PDF без .pdf> (страница X)».\n\n"
+            "Требования:\n"
+            "• Числа, нормы, пункты — только из предоставленных фрагментов.\n"
+            "• Если данных недостаточно, прямо укажи, чего не хватает.\n"
+            "• Не вставляй ссылки/сноски внутри текста — только финальный список источников."
+        )    
+
+        # 6) История диалогов: user_id -> список сообщений {"role":..., "content":...}
+        self.conversation_history: dict[str, list[dict]] = defaultdict(list)
+        self.MAX_HISTORY = 5  # будем хранить не более 2*MAX_HISTORY последних сообщений
+
+        # Пути к папкам
+        self.docs_path = "docs/"
+        self.chroma_path = chroma_path
+
+    # -------------------------
+    # 1) Методы для query extension (глоссарий)
+    # -------------------------
+
+    def _extend_query(self, query: str) -> str:
+        """
+        Ищет все термины из self.glossary в исходном запросе (точное вхождение без учёта регистров).
+        Если термин найден, врезает его определение (из JSON) в конец запроса.
+        Возвращает «расширённый» запрос.
+        """
+        lowered_query = query.lower()
+        extras = []
+
+        for term, definition in self.glossary.items():
+            if term.lower() in lowered_query:
+                # Добавляем "термин: определение" как дополнительную часть
+                extras.append(f"{term}: {definition}")
+
+        if not extras:
+            return query
+        return query + " " + " ".join(extras)
+
+    # -------------------------
+    # 2) Методы для истории диалога
+    # -------------------------
+
+    def update_history(self, user_id: str, role: str, text: str):
+        """
+        Добавляем запись {"role": role, "content": text} в историю для данного user_id.
+        Если превышается 2*MAX_HISTORY, обрезаем старые записи.
+        """
+        entry = {"role": role, "content": text}
+        self.conversation_history[user_id].append(entry)
+        if len(self.conversation_history[user_id]) > self.MAX_HISTORY * 2:
+            self.conversation_history[user_id] = self.conversation_history[user_id][-self.MAX_HISTORY * 2 :]
+
+    def _format_history(self, user_id: str) -> str:
+        """
+        Форматирует историю в строку:
+        <role>
+        content
+        <role>
+        content
+        …
+        """
+        history_str = ""
+        for msg in self.conversation_history[user_id]:
+            r = msg.get("role")
+            c = msg.get("content", "").strip()
+            if r and c:
+                history_str += f"<{r}>\n{c}\n"
+        return history_str
+
+    def clear_history(self, user_id: str):
+        """Очищает всю историю для указанного user_id."""
+        self.conversation_history[user_id] = []
+
+    # 3) Retrieval + Filtering + Rerank (с учетом расширённого запроса)
+    # -------------------------
+
+    def _rerank(
+        self,
+        query: str,
+        docs: list[Document],
+        top_n: int = 1,
+        score_threshold: float = 0.0
+    ) -> list[Document]:
+        """
+        Перенумеровываем ранжируемые документы через Cross‑Encoder:
+        1) Считаем скоры для каждой пары [query, doc.page_content]
+        2) Оставляем только те, чей скор >= score_threshold
+        3) Если после фильтрации ничего не осталось, просто возвращаем топ‑top_n по скору
+        4) Иначе – сортируем отфильтрованные и возвращаем первые top_n
+        """
+        if not docs:
+            return []
+
+        pairs  = [[query, doc.page_content] for doc in docs]
+        scores = self.cross_encoder.predict(pairs)
+
+        # Фильтруем
+        filtered = [(doc, sc) for doc, sc in zip(docs, scores) if sc >= score_threshold]
+
+        if not filtered:
+            # Ничего не прошло фильтрацию → берём top_n по любым скорам
+            scored_docs = list(zip(docs, scores))
+            scored_docs.sort(key=lambda x: x[1], reverse=True)
+            return [doc for doc, _ in scored_docs[:top_n]]
+
+        # Иначе сортируем отфильтрованные по убыванию
+        filtered.sort(key=lambda x: x[1], reverse=True)
+        return [doc for doc, _ in filtered[:top_n]]
+
+    def _search_docs(
+        self,
+        query: str,
+        k: int = 10,
+        top_n: int = 3,
+        score_threshold: float = 0.3
+    ) -> list[Document]:
+        """
+        1) Сначала расширяем запрос через _extend_query
+        2) Получаем k кандидатов через MMR
+        3) Фильтруем + rerank через Cross‑Encoder с порогом score_threshold
+        4) Возвращаем top_n
+        """
+        # 1) Расширяем запрос
+        extended_query = self._extend_query(query)
+
+        # 2) Берём k кандидатов из MMR
+        retriever = self.vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": k, "fetch_k": k * 6, "lambda_mult": 0.45}
+        )
+        initial_docs = retriever.get_relevant_documents(extended_query)
+
+        # 3) Фильтруем + реранжим
+        return self._rerank(extended_query, initial_docs, top_n=top_n, score_threshold=score_threshold)
+
+    # -------------------------
+    # 5) Генерация ответа (multi‑turn + динамика токенов)
+    # -------------------------
+
+    def generate_answer(
+        self,
+        user_id: str,
+        query: str,
+        k: int = 3,
+        score_threshold: float = 0.3,
+        max_new_tokens: int = None,
+        min_new_tokens: int = 50
+    ) -> str:
+        """
+        Multi‑turn генерация ответа:
+        1) Сохраняем запрос пользователя в историю
+        2) Делаем _search_docs (с учётом расширённого запроса)
+        3) Формируем citations и formatted_docs для prompt
+        4) Берём последние 2*MAX_HISTORY сообщений истории → history_str
+        5) Формируем prompt из:
+           <system>, <history>, <documents>, <user>
+        6) Если max_new_tokens не задан, считаем динамически,
+           чтобы не превышать максимальный размер контекста модели
+        7) Генерируем текст, добавляем в историю
+        8) Возвращаем строку с «Источники: …\n\n…ответ…»
+        """
+
+        #1) Сохраняем запрос пользователя
+        self.update_history(user_id, "user", query)
+
+        #2) Получаем список документов
+        docs = self._search_docs(query, k=k, top_n=k, score_threshold=score_threshold)
+
+        #3) Готовим цитаты
+        citations = [
+            f"{d.metadata.get('title','unknown')}:стр.{d.metadata.get('page','?')}"
+            for d in docs
+        ]
+
+        formatted_docs = [
+            {"doc_id": i, "title": citations[i], "content": d.page_content}
+            for i, d in enumerate(docs)
+        ]
+
+        # 4) Строим историю
+        history_str = self._format_history(user_id)
+
+        # 5) Сборка prompt
+        sample = [
+            {"role": "system",    "content": self.SYSTEM_PROMPT},
+            {"role": "history",   "content": history_str},
+            {"role": "documents", "content": json.dumps(formatted_docs, ensure_ascii=False)},
+            {"role": "user",      "content": query}
+        ]
+        prompt = ""
+        for msg in sample:
+            prompt += f"<{msg['role']}>\n{msg['content']}\n"
+        prompt += "<assistant>\n"
+
+        # 6) Динамический max_new_tokens
+        if max_new_tokens is None:
+            enc = self.tokenizer(prompt, return_tensors="pt").input_ids
+            curr_len = enc.shape[1]
+            model_max = getattr(self.model.config, "n_positions", None) or getattr(self.model.config, "max_position_embeddings", 4096)
+            available = model_max - curr_len - 64
+            max_new_tokens = max(min(available, 256), min_new_tokens)
+
+        # 7) Генерация
+        inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
+        if self.device == "cuda":
+            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        t0 = time.time()
+        out = self.model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=0.2,
+            top_p=0.9,
+            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.tokenizer.eos_token_id,
+
+        )
+        dt = time.time() - t0
+
+        # 8) Декодируем и обрезаем после </assistant> (если есть)
+        gen_text = self.tokenizer.decode(
+            out[0][inputs.input_ids.shape[1]:],
+            skip_special_tokens=False
+        )
+        if "</assistant>" in gen_text:
+            gen_text = gen_text.split("</assistant>")[0]
+        answer_body = gen_text.replace("</s>", "").strip()
+
+        # # 9) Сохраняем ответ в историю
+        self.update_history(user_id, "assistant", answer_body)
+
+        # 10) Собираем финальный ответ
+        seen = set()
+        formatted = []
+        for c in citations:
+            if c in seen:
+                continue
+            seen.add(c)
+            if ":стр." in c:
+                title, page = c.split(":стр.")
+                title = title.replace(".pdf", "")
+                formatted.append(f"{title} (страница {page})")
+
+        citation_str = "Источники:\n" + "\n".join(formatted)
+        final_answer = answer_body + citation_str
+        return final_answer
+
+
+# === Singleton ===
+MODEL_NAME   = "Qwen/Qwen2.5-1.5B-Instruct"
+CHROMA_PATH  = "chroma_db/"
+GLOSSARY_JSON= "glossary.json"
+rag = RAGService(MODEL_NAME, CHROMA_PATH, GLOSSARY_JSON)
