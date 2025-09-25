@@ -1,18 +1,15 @@
-import os
-import torch
-import time
 import json
-import shutil
-import chromadb
-from uuid import uuid4
+import os
 from collections import defaultdict
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from sentence_transformers import CrossEncoder
+
+import chromadb
+import torch
 from langchain.schema import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from sentence_transformers import CrossEncoder
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 class RAGService:
@@ -284,7 +281,7 @@ class RAGService:
         inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
         if self.device == "cuda":
             inputs = {k: v.to("cuda") for k, v in inputs.items()}
-        t0 = time.time()
+
         out = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
@@ -295,7 +292,6 @@ class RAGService:
             pad_token_id=self.tokenizer.eos_token_id,
 
         )
-        dt = time.time() - t0
 
         # 8) Декодируем и обрезаем после </assistant> (если есть)
         gen_text = self.tokenizer.decode(

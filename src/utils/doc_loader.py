@@ -1,11 +1,12 @@
 import os
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
+from uuid import uuid4
+
 import chromadb
 from langchain.schema.document import Document
+from langchain_chroma import Chroma
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
-from uuid import uuid4
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Настройки
 CHROMA_PATH = "chroma_db/"
