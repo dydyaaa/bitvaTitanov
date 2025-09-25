@@ -1,5 +1,6 @@
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+
 from src.chat.models import Message
 
 
