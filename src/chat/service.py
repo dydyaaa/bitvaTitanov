@@ -1,6 +1,5 @@
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy import select, delete
 from src.chat.models import Message
 
 
@@ -13,12 +12,12 @@ async def add_message(db: AsyncSession, user_id: int, text: str):
     return msg
 
 async def get_history(db: AsyncSession, user_id: int):
-    result = await db.execute(
-        text("SELECT * FROM messages WHERE user_id = :user_id ORDER BY created_at DESC"),
-        {"user_id": user_id}
-    )
-    return result.fetchall()
+    query = select(Message).where(Message.user_id == user_id).order_by(Message.created_at.desc())
+    result = await db.execute(query)
+    return result.scalars().all()
 
 async def clear_history(db: AsyncSession, user_id: int):
-    await db.execute(f"DELETE FROM messages WHERE user_id = {user_id}")
+    stmt = delete(Message).where(Message.user_id == user_id)
+    await db.execute(stmt)
     await db.commit()
+
