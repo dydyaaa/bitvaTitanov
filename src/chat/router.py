@@ -7,7 +7,6 @@ from src.core.security import decode_token
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# ✅ Берём токен из Authorization header
 async def get_current_user(
     authorization: str = Header(...),
 ):

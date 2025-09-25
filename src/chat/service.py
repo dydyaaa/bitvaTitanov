@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chat.models import Message
@@ -13,7 +14,8 @@ async def add_message(db: AsyncSession, user_id: int, text: str):
 
 async def get_history(db: AsyncSession, user_id: int):
     result = await db.execute(
-        f"SELECT * FROM messages WHERE user_id = {user_id} ORDER BY created_at DESC"
+        text("SELECT * FROM messages WHERE user_id = :user_id ORDER BY created_at DESC"),
+        {"user_id": user_id}
     )
     return result.fetchall()
 
