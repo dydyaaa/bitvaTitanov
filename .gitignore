@@ -7,3 +7,5 @@ __pycache__/
 .env
 app.log
 error.log
+.mypy_cache
+/.ruff_cache
