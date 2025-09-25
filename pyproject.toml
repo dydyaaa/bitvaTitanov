@@ -1,6 +1,12 @@
-[tool.flake8]
-exclude = [".git", "__pycache__", "venv", ".venv", "env"]
-max-line-length = 88
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = ["alembic"]
+
+[tool.isort]
+profile = "black"
+skip = ["alembic", "venv"]
 
 [tool.mypy]
+python_version = "3.11"
 ignore_missing_imports = true
