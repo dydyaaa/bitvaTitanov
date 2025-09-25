@@ -1,6 +1,8 @@
 import json
 import re
+
 from docx import Document
+
 
 def parse_glossary(docx_file, json_file):
     doc = Document(docx_file)

@@ -1,5 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.chat.models import Message
+
 
 async def add_message(db: AsyncSession, user_id: int, text: str):
     bot_response = "Привет" # Сюда метод ответа или че нибудь такое, хз
