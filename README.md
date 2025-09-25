@@ -12,13 +12,13 @@ git clone https://github.com/dydyaaa/bitvaTitanov.git
 * for mac os:
 ```
 cd .\bitvaTitanov\
-py -m venv venv
+python -m venv venv
 source .venv/bin/activate
 ```
 * for windows
 ```
 cd .\bitvaTitanov\
-py -m venv venv
+python -m venv venv
 .venv\Scripts\Activate.ps1
 ```
 
