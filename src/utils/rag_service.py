@@ -1,7 +1,8 @@
 import json
 import os
+import time
 from collections import defaultdict
-import time, torch
+
 import chromadb
 import torch
 from langchain.schema import Document
@@ -9,7 +10,7 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import CrossEncoder
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class RAGService:

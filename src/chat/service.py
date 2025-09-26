@@ -1,9 +1,12 @@
+import time
+
+import torch
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import time, torch
 
 from src.chat.models import Message
 from src.utils.rag_service import rag
+
 
 async def add_message(db: AsyncSession, user_id: int, text: str):
     t0 = time.perf_counter()

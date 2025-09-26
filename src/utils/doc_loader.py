@@ -67,9 +67,9 @@ from uuid import uuid4
 import chromadb
 from langchain.schema import Document
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 
 CHROMA_PATH = "src/chroma_db/"
 PDF_DIR = "src/docs/"
