@@ -384,5 +384,5 @@ class RAGService:
 # === Singleton ===
 MODEL_NAME   = "Qwen/Qwen2.5-1.5B-Instruct"
 CHROMA_PATH  = "src/chroma_db/"
-GLOSSARY_JSON= "glossary.json"
+GLOSSARY_JSON= "jsons/glossary.json"
 rag = RAGService(MODEL_NAME, CHROMA_PATH, GLOSSARY_JSON)
