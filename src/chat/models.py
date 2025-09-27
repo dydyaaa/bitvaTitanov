@@ -13,6 +13,6 @@ class Message(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     text = Column(String, nullable=False)
     response = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User")
