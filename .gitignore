@@ -8,4 +8,5 @@ __pycache__/
 app.log
 error.log
 .mypy_cache
-/.ruff_cache
+.ruff_cache
+.pytest_cache
