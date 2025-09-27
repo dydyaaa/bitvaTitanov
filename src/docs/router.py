@@ -1,10 +1,10 @@
-from fastapi import APIRouter, UploadFile, Depends
+from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
-from src.docs.schemas import DocumentBase
 from src.docs import service
+from src.docs.schemas import DocumentBase
 
 router = APIRouter(prefix="/docs", tags=["documents"])
 
