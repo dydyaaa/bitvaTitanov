@@ -3,12 +3,13 @@ import os
 import re
 import time
 from collections import defaultdict
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from uuid import uuid4
+from src.utils.doc_loader import clean_text, extract_meta_from_text, normalize_title
 import chromadb
 import torch
 from langchain.schema import Document
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import CrossEncoder
