@@ -1,28 +1,25 @@
-# name: Lint and Type Check
+name: Lint and Type Check
 
-# on:
-#   push:
-#     branches: [ main ]
-#   pull_request:
+on:
+  push:
+    branches: [ main ]
+  pull_request:
 
-# jobs:
-#   lint:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       - name: Set up Python
-#         uses: actions/setup-python@v5
-#         with:
-#           python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-#       - name: Install linters
-#         run: |
-#           pip install ruff mypy isort flake8
+      - name: Install linters
+        run: |
+          pip install ruff mypy isort flake8
 
-#       - name: Run Ruff
-#         run: ruff check .
-
-#       - name: Run Isort
-#         run: isort . --check-only --diff
+      - name: Run Ruff
+        run: ruff check .
