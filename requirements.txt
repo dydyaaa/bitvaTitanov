@@ -23,6 +23,7 @@ coloredlogs==15.0.1
 dataclasses-json==0.6.7
 distro==1.9.0
 docx==0.2.4
+docx2txt==0.9
 durationpy==0.10
 ecdsa==0.19.1
 fastapi==0.117.1
@@ -138,7 +139,7 @@ sympy==1.13.1
 tenacity==9.1.2
 threadpoolctl==3.6.0
 tokenizers==0.22.1
-torch==2.6.0+cu124
+# python -m pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0+cu124
 tqdm==4.67.1
 transformers==4.56.2
 typer==0.19.2

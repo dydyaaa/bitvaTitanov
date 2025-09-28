@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from collections import defaultdict
 
@@ -11,6 +12,143 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import CrossEncoder
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+STRIP_TAGS_RE = re.compile(r"</?system>|</?assistant>|</?user>|<\/?[^>]+>", re.IGNORECASE)
+WS_RE = re.compile(r"\s+")
+SECTION_RE = re.compile(r'(?:Раздел|Глава)\s+([IVXLC\d]+)[\.\:\)]?\s*(.+)?', re.IGNORECASE)
+CLAUSE_RE  = re.compile(r'(?:п\.|пункт)\s*([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
+END_PUNCT_RE = re.compile(r"[.!?…»)\]]$")
+BULLET_LINE_RE = re.compile(r"^\s*(?:[-*•—]|[\d]{1,2}\.)\s+", re.MULTILINE)
+
+
+def drop_trailing_incomplete_item(text: str) -> str:
+    """Если последний буллет оборван (нет завершающей пунктуации) — удаляем его."""
+    lines = text.rstrip().splitlines()
+    for i in range(len(lines) - 1, -1, -1):
+        if BULLET_LINE_RE.match(lines[i]):
+            if not END_PUNCT_RE.search(lines[i].rstrip()):
+                del lines[i]
+            break
+    return "\n".join(lines).rstrip()
+ 
+
+# --- мягкая нормализация терминов/опечаток в доменных фразах ---
+def normalize_terms(text: str) -> str:
+    """Правит частые огрехи в ответах (осторожные замены по контексту)."""
+    # 1) Нормализуем «ТУ 152» / «ТУ- 152» → «ТУ-152»
+    text = re.sub(r"ТУ\s*-?\s*152", "ТУ-152", text, flags=re.IGNORECASE)
+
+    # 2) «в карте дизеля/двигателя» → «в картере ...»
+    text = re.sub(r"\bв\s+карте\s+(дизеля|двигателя)\b", r"в картере \1", text, flags=re.IGNORECASE)
+
+    # 3) «изменения/изменений/изменениях ... в журнал(е) ТУ-152» → «замечания/...»
+    #   — только если рядом упоминается журнал ТУ-152 (чтобы не ломать другие случаи)
+    def _repl_changes(m: re.Match) -> str:
+        ending = m.group(1)  # я | й | ях
+        return "замечани" + ending  # даёт: замечания/замечаний/замечаниях
+    text = re.sub(
+        r"\bизменени(я|й|ях)\b(?=[^.\n]{0,80}журнал\w*\s*(?:формы\s*)?ТУ-?\s*152)",
+        _repl_changes,
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    return text
+
+
+def _title_from_meta(meta: dict) -> str:
+    t = (meta.get("doc_title") or meta.get("title") or "Документ")
+    if isinstance(t, str) and t.endswith((".pdf", ".docx")):
+        t = t.rsplit(".", 1)[0]
+    return t
+
+
+def _fallback_clause_section(text: str) -> tuple[str | None, str | None]:
+    head = (text or "")[:1200]
+    c = CLAUSE_RE.search(head)
+    clause = c.group(1) if c else None
+    m = SECTION_RE.search(head)
+    section = None
+    if m:
+        roman_or_num, name = m.groups()
+        name = (name or "").strip()
+        section = f"Раздел {roman_or_num}" + (f" {name}" if name else "")
+    return clause, section
+
+
+def group_sources_by_doc(docs: list[Document], limit: int = 5) -> list[str]:
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for d in docs:
+        meta = getattr(d, "metadata", {}) or {}
+        title = _title_from_meta(meta)
+        clause = meta.get("clause")
+        section = meta.get("section")
+        page = meta.get("page") if isinstance(meta.get("page"), int) else None
+        if not clause and not section:
+            fc, fs = _fallback_clause_section(d.page_content)
+            clause = clause or fc 
+            section = section or fs
+        g = groups.setdefault(title, {"clauses": set(), "sections": set(), "pages": set()})
+        if clause: 
+            g["clauses"].add(clause)
+        elif section: 
+            g["sections"].add(section)
+        elif page: 
+            g["pages"].add(page)
+
+    lines = []
+    for title, g in groups.items():
+        parts = []
+        if g["clauses"]:
+            def key(c): return [int(x) for x in c.split(".") if x.isdigit()]
+            parts.append("п. " + "; ".join(sorted(g["clauses"], key=key))[:120])
+        elif g["sections"]:
+            parts.append("; ".join(sorted(g["sections"]))[:120])
+        elif g["pages"]:
+            pages = sorted(g["pages"])
+            parts.append("стр. " + (", ".join(map(str, pages[:3])) + (" …" if len(pages) > 3 else "")))
+        lines.append(title if not parts else f"{title}, {', '.join(parts)}")
+        if len(lines) >= limit:
+            break
+    return lines
+
+
+def postprocess_text(text: str) -> str:
+    if not text:
+        return ""
+    text = STRIP_TAGS_RE.sub("", text)
+    m = re.search(r"(источники\s*:?).*$", text, flags=re.IGNORECASE | re.DOTALL)
+    if m:
+        text = text[:m.start()].rstrip()
+    for lab in ("Ответ:", "Пункты:", "Human:", "Assistant:", "Пользователь:", "Ассистент:"):
+        text = text.replace(lab, "")
+    text = WS_RE.sub(" ", text).strip()
+    seen, out = set(), []
+    for s in re.split(r"(?<=[\.\?\!])\s+", text):
+        k = s.strip().lower()
+        if k and k not in seen:
+            seen.add(k)
+            out.append(s.strip())
+    return " ".join(out)
+
+
+
+def _format_source(meta: dict) -> str:
+    """Приоритет: пункт > раздел > страница > только название."""
+    title = (meta.get("doc_title") or meta.get("title") or "Документ")
+    if isinstance(title, str) and title.endswith((".pdf", ".docx")):
+        title = title.rsplit(".", 1)[0]
+    clause  = meta.get("clause")
+    section = meta.get("section")
+    page    = meta.get("page")
+    if clause:
+        return f"{title}, п. {clause}"
+    if section:
+        return f"{title}, {section}"
+    if isinstance(page, int):
+        return f"{title}, стр. {page}"
+    return title
 
 
 class RAGService:
@@ -26,22 +164,15 @@ class RAGService:
         else:
             print(f"[RAGService] Файл глоссария {glossary_json} не найден")
 
-        # 1) Токенизатор и модель с 4‑битным квантованием
-        # bnb = BitsAndBytesConfig(
-        #     load_in_4bit=True,
-        #     bnb_4bit_compute_dtype=torch.float16,
-        #     bnb_4bit_use_double_quant=False,
-        #     bnb_4bit_quant_type="nf4"
-        # )
-        print("==" * 50 , self.device, "===" * 50)
+
+        print("==" * 50 , self.device, "===" * 30)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
         if self.device == "cuda":
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 device_map="auto",
-                # quantization_config=bnb,
-                low_cpu_mem_usage=True,
                 dtype=torch.float16,
+                low_cpu_mem_usage=True,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -70,20 +201,22 @@ class RAGService:
         # 4) Cross‑encoder для rerank и фильтрации
         self.cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2", device="cuda" if torch.cuda.is_available() else "cpu")
 
+
         # 5) Системный промпт
         self.SYSTEM_PROMPT = (
             "Ты — ассистент по нормативным документам и технической эксплуатации железнодорожного транспорта (РЖД).\n"
-            "Отвечай строго на основе переданных документов (<documents>) и истории (<history>). "
-            "Не привлекай внешние знания и не домысливай факты.\n\n"
+            "Отвечай строго на основе переданных документов (<documents>) и истории (<history>). Не привлекай внешние знания.\n\n"
             "Формат ответа:\n"
-            "• Короткий вывод (1–2 предложения).\n"
-            "• Затем структурированные пункты/шаги (по делу, без воды).\n"
-            "• В конце отдельным блоком добавь 'Источники:' — список вида «<Название PDF без .pdf> (страница X)».\n\n"
+            "• Первая строка: краткий вывод (1–2 предложения, ≤120 слов) \n"
+            "• Далее до 5 маркеров с действиями/нормами (кратко и по делу, без лишней типографики).\n"
+            "• В конце отдельным блоком добавь 'Источники:' — список вида «<Название>, п. X.Y» или «<Название>, Раздел N», если пункта нет — «стр. N».\n\n"
             "Требования:\n"
             "• Числа, нормы, пункты — только из предоставленных фрагментов.\n"
             "• Если данных недостаточно, прямо укажи, чего не хватает.\n"
             "• Не вставляй ссылки/сноски внутри текста — только финальный список источников."
-        )    
+        )
+
+        
 
         # 6) История диалогов: user_id -> список сообщений {"role":..., "content":...}
         self.conversation_history: dict[str, list[dict]] = defaultdict(list)
@@ -104,6 +237,14 @@ class RAGService:
             except Exception:
                 print("[RAG] Using eager attention")
 
+    def _keyword_boost(self, query: str, meta: dict) -> float:
+        q = (query or "").lower()
+        kws = (meta or {}).get("keywords") or ""  # строка "kw1, kw2"
+        score = 0.0
+        for k in [x.strip() for x in kws.split(",") if x.strip()]:
+            if k in q:
+                score += 1.0
+        return score
 
     # -------------------------
     # 1) Методы для query extension (глоссарий)
@@ -142,21 +283,19 @@ class RAGService:
             self.conversation_history[user_id] = self.conversation_history[user_id][-self.MAX_HISTORY * 2 :]
 
     def _format_history(self, user_id: str) -> str:
-        """
-        Форматирует историю в строку:
-        <role>
-        content
-        <role>
-        content
-        …
-        """
-        history_str = ""
-        for msg in self.conversation_history[user_id]:
-            r = msg.get("role")
-            c = msg.get("content", "").strip()
-            if r and c:
-                history_str += f"<{r}>\n{c}\n"
-        return history_str
+        """Простой диалоговый формат, понятный большинству LLM."""
+        lines = []
+        for m in self.conversation_history[user_id]:
+            r = m.get("role", "")
+            c = (m.get("content", "") or "").strip()
+            if not c:
+                continue
+            if r == "user":
+                lines.append(f"Пользователь: {c}")
+            elif r == "assistant":
+                lines.append(f"Ассистент: {c}")
+        return "\n".join(lines)
+
 
     def clear_history(self, user_id: str):
         """Очищает всю историю для указанного user_id."""
@@ -221,6 +360,12 @@ class RAGService:
         )
         initial_docs = retriever.invoke(extended_query)
 
+        # --- лёгкий переранж по keyword boost (чуть «выталкиваем» целевые чанки вверх)
+        initial_docs = sorted(
+            initial_docs,
+            key=lambda d: -self._keyword_boost(extended_query, getattr(d, "metadata", {}) or {})
+        )
+
         # 3) Фильтруем + реранжим
         return self._rerank(extended_query, initial_docs, top_n=top_n, score_threshold=score_threshold)
 
@@ -232,7 +377,7 @@ class RAGService:
         self,
         user_id: str,
         query: str,
-        k: int = 3,
+        k: int = 4,
         score_threshold: float = 0.3,
         max_new_tokens: int = None,
         min_new_tokens: int = 50
@@ -251,19 +396,24 @@ class RAGService:
         # 2) Получаем список документов
         t0 = time.perf_counter()
         docs = self._search_docs(query, k=k, top_n=k, score_threshold=score_threshold)
+        if not docs:
+            return ("Недостаточно данных в загруженных документах для точного ответа. "
+                    "Уточни запрос или добавь источник.\n\nИсточники: —")
         print(f"[RAG] retrieval+rerank: {time.perf_counter()-t0:.3f} s")
 
         # 3) Готовим цитаты
         t0 = time.perf_counter()
-        citations = [
-            f"{d.metadata.get('title','unknown')}:стр.{d.metadata.get('page','?')}"
-            for d in docs
-        ]
+        sources = group_sources_by_doc(docs, limit=5)
         formatted_docs = [
-            {"doc_id": i, "title": citations[i], "content": d.page_content}
+            {
+                "doc_id": i,
+                "title": sources[i] if i < len(sources) else (d.metadata.get("title") or "Источник"),
+                "content": d.page_content
+            }
             for i, d in enumerate(docs)
         ]
         print(f"[RAG] citations+format_docs: {time.perf_counter()-t0:.3f} s")
+
 
         # 4) Строим историю
         t0 = time.perf_counter()
@@ -289,9 +439,13 @@ class RAGService:
         if max_new_tokens is None:
             enc = self.tokenizer(prompt, return_tensors="pt")
             curr_len = enc["input_ids"].shape[1]
-            model_max = getattr(self.model.config, "n_positions", None) or getattr(self.model.config, "max_position_embeddings", 4096)
+            model_max = (
+                getattr(self.model.config, "n_positions", None)
+                or getattr(self.model.config, "max_position_embeddings", None)
+                or getattr(self.tokenizer, "model_max_length", 4096)
+            )
             available = model_max - curr_len - 64
-            max_new_tokens = max(min(available, 256), min_new_tokens)
+            max_new_tokens = max(min(available, 330), min_new_tokens)
         print(f"[RAG] calc_max_tokens: {time.perf_counter()-t0:.3f} s")
 
         # 7) Генерация
@@ -316,15 +470,16 @@ class RAGService:
             vram_res = torch.cuda.memory_reserved() / 1024 ** 2
             print(f"[MEM][{tag}] VRAM allocated: {vram_alloc:.2f} MB, reserved: {vram_res:.2f} MB")
         # -----------------------------------------------------------------------------------------
-        out = self.model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.2,
-            top_p=0.9,
-            eos_token_id=self.tokenizer.eos_token_id,
-            pad_token_id=self.tokenizer.eos_token_id,
-        )
+        with torch.no_grad():
+            out = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=0.1,
+                top_p=0.9,
+                eos_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.eos_token_id,
+            )
         # ------------------------------------------------------------------------------------
         tag = "after"
         process = psutil.Process(os.getpid())
@@ -360,19 +515,12 @@ class RAGService:
 
         # 10) Формируем финальный ответ
         t0 = time.perf_counter()
-        seen = set()
-        formatted = []
-        for c in citations:
-            if c in seen:
-                continue
-            seen.add(c)
-            if ":стр." in c:
-                title, page = c.split(":стр.")
-                title = title.replace(".pdf", "")
-                formatted.append(f"{title} (страница {page})")
+        answer_clean = postprocess_text(answer_body)
+        answer_clean = normalize_terms(answer_clean)
+        answer_clean = drop_trailing_incomplete_item(answer_clean)
 
-        citation_str = "Источники:\n" + "\n".join(formatted) if formatted else "Источники: —"
-        final_answer = (answer_body.strip() + "\n\n" + citation_str).strip()
+        citation_str = "Источники:\n" + "\n".join(f"- {s}" for s in sources) if sources else "Источники: —"
+        final_answer = (answer_clean.strip() + "\n\n" + citation_str).strip()
         print(f"[RAG] build_final_answer: {time.perf_counter()-t0:.3f} s")
 
         print(f"[RAG] TOTAL: {time.perf_counter()-t_all0:.3f} s")
