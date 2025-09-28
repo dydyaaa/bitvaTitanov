@@ -3,7 +3,8 @@ import os
 import re
 import time
 from collections import defaultdict
-
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from uuid import uuid4
 import chromadb
 import torch
 from langchain.schema import Document
@@ -269,7 +270,7 @@ class RAGService:
         return query + " " + " ".join(extras)
 
     # -------------------------
-    # 2) Методы для истории диалога
+    # 2) Методы для истории диалога и работа с файлами
     # -------------------------
 
     def update_history(self, user_id: str, role: str, text: str):
@@ -296,10 +297,132 @@ class RAGService:
                 lines.append(f"Ассистент: {c}")
         return "\n".join(lines)
 
-
     def clear_history(self, user_id: str):
         """Очищает всю историю для указанного user_id."""
         self.conversation_history[user_id] = []
+
+    def add_document(self, file_path: str) -> int:
+        """
+        Добавляет в ChromaDB один документ (PDF или DOCX).
+        Логика та же, что в инициализаторе базы: чистка текста, сплит, метаданные.
+        Возвращает число добавленных чанков.
+        """
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Файл не найден: {file_path}")
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in (".pdf", ".docx"):
+            raise ValueError("Поддерживаются только PDF и DOCX файлы.")
+
+        fname = os.path.basename(file_path)
+        print(f"[add_document] Индексация: {fname}")
+
+        # 1) Загрузка документов (pdf постранично, docx целиком)
+        if ext == ".pdf":
+            loader = PyPDFLoader(file_path)
+            docs = loader.load_and_split()
+            for p in docs:
+                p.metadata["source"] = "pdf"
+                p.metadata["title"] = fname
+                # PyPDFLoader отдаёт page с нуля — приведём к 1-based если это int
+                raw = p.metadata.get("page", None)
+                p.metadata["page"] = (raw + 1) if isinstance(raw, int) else None
+                p.page_content = clean_text(p.page_content)
+        else:  # .docx
+            loader = Docx2txtLoader(file_path)
+            docs = loader.load()
+            for d in docs:
+                d.metadata["source"] = "docx"
+                d.metadata["title"] = fname
+                d.metadata["page"] = None      # у docx нет страниц
+                d.page_content = clean_text(d.page_content)
+
+        if not docs:
+            print("[add_document] Пустой документ после загрузки.")
+            return 0
+
+        # 2) Сплит
+        raw_chunks = self.text_splitter.split_documents(docs)
+
+        # 3) Обогащение метаданных + фильтр коротких
+        base_title = normalize_title(file_path)
+        chunks: list[Document] = []
+        MIN_CHARS = globals().get("MIN_CHUNK_CHARS", 80)  # возьмём глобальную константу, если есть
+
+        for i, ch in enumerate(raw_chunks):
+            ch.page_content = clean_text(ch.page_content)
+            if len((ch.page_content or "").strip()) < MIN_CHARS:
+                continue
+
+            ch.metadata["chunk_id"] = str(uuid4())
+            ch.metadata["chunk_index"] = i
+            ch.metadata["chunk_start"] = ch.metadata.get("start_index", None)
+
+            ch.metadata.setdefault("title", fname)
+            ch.metadata.setdefault("page", None)
+            ch.metadata["doc_title"] = base_title
+
+            extra = extract_meta_from_text(ch.page_content)
+            if extra.get("section"):
+                ch.metadata["section"] = extra["section"]
+            if extra.get("clause"):
+                ch.metadata["clause"] = extra["clause"]
+            if extra.get("keywords"):
+                kws = [k.strip() for k in extra["keywords"] if k and isinstance(k, str)]
+                ch.metadata["keywords"] = ", ".join(kws) if kws else None
+
+            chunks.append(ch)
+
+        if not chunks:
+            print("[add_document] Нет валидных чанков после фильтра.")
+            return 0
+
+        # 4) Запись в текущую коллекцию Chroma
+        try:
+            self.vectorstore.add_documents(chunks)
+        except Exception as e:
+            print(f"[add_document] Ошибка при сохранении в Chroma: {e}")
+            raise
+
+        print(f"[add_document] Добавлено {len(chunks)} чанков из «{fname}».")
+        return len(chunks)
+
+    def get_loaded_documents(self) -> list[str]:
+        """
+        Возвращает список уникальных названий документов (metadata['title']),
+        уже добавленных в ChromaDB (текущую коллекцию).
+        """
+        collection = getattr(self.vectorstore, "_collection", None)
+        if collection is None:
+            return []
+        try:
+            docs = collection.get(include=["metadatas"])
+        except Exception:
+            return []
+        titles: set[str] = set()
+        for metas in docs.get("metadatas", []):
+            if isinstance(metas, dict) and "title" in metas:
+                titles.add(metas["title"])
+        return sorted(titles)
+
+    def remove_document(self, title: str) -> int:
+        """
+        Удаляет из ChromaDB все чанки, у которых metadata['title'] == title.
+        Возвращает число удалённых записей (по ответу Chroma).
+        """
+        collection = getattr(self.vectorstore, "_collection", None)
+        if collection is None:
+            return 0
+        try:
+            res = collection.delete(where={"title": title})
+            # Chroma может вернуть ids удалённых; если нет — просто 0/1 незначимо
+            removed = len(res) if isinstance(res, list) else 0
+            print(f"[remove_document] Удалено записей: {removed} для «{title}».")
+            return removed
+        except Exception as e:
+            print(f"[remove_document] Ошибка при удалении «{title}»: {e}")
+            raise
 
     # 3) Retrieval + Filtering + Rerank (с учетом расширённого запроса)
     # -------------------------
