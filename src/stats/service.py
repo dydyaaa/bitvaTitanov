@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

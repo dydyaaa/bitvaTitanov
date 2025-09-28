@@ -1,4 +1,3 @@
-import os
 import uuid
 from pathlib import Path
 
@@ -20,12 +19,7 @@ async def save_file(file: UploadFile, db: AsyncSession) -> Document:
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
         "application/msword",  # .doc
-        "text/plain",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
-        "application/vnd.ms-excel",  # .xls
-        "image/jpeg",
-        "image/png",
-        "image/gif",
+        "text/plain"
     ]
     
     if file.content_type not in allowed_types:
