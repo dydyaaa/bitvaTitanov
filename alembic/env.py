@@ -5,7 +5,8 @@ from alembic import context
 from src.core.config import settings
 from src.core.database import Base
 from src.users.models import User
-from src.chat.models import Message 
+from src.chat.models import Message
+from src.documents.models import Document 
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
