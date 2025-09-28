@@ -1,7 +1,7 @@
 import time
 
 import torch
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chat.models import Message
@@ -26,12 +26,18 @@ async def add_message(db: AsyncSession, user_id: int, text: str):
     return msg
 
 async def get_history(db: AsyncSession, user_id: int):
-    query = select(Message).where(Message.user_id == user_id).order_by(Message.created_at.desc())
+    query = select(Message).where(
+        Message.user_id == user_id,
+        not Message.is_deleted
+        ).order_by(Message.created_at.desc())
     result = await db.execute(query)
     return result.scalars().all()
 
 async def clear_history(db: AsyncSession, user_id: int):
-    stmt = delete(Message).where(Message.user_id == user_id)
+    stmt = update(Message).where(
+        Message.user_id == user_id,
+        not Message.is_deleted
+        ).values(is_deleted=True)
     await db.execute(stmt)
     await db.commit()
 
