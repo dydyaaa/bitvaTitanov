@@ -1,22 +1,17 @@
-import time
-import re
 import json
 import os
-import torch
-import chromadb
-
+import re
+import time
 from collections import defaultdict
 
-
+import chromadb
+import torch
 from langchain.schema import Document
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from sentence_transformers import CrossEncoder
-
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
 
 STRIP_TAGS_RE = re.compile(r"</?system>|</?assistant>|</?user>|<\/?[^>]+>", re.IGNORECASE)
 WS_RE = re.compile(r"\s+")
@@ -70,7 +65,8 @@ def _title_from_meta(meta: dict) -> str:
 
 def _fallback_clause_section(text: str) -> tuple[str | None, str | None]:
     head = (text or "")[:1200]
-    c = CLAUSE_RE.search(head); clause = c.group(1) if c else None
+    c = CLAUSE_RE.search(head)
+    clause = c.group(1) if c else None
     m = SECTION_RE.search(head)
     section = None
     if m:
@@ -86,15 +82,20 @@ def group_sources_by_doc(docs: list[Document], limit: int = 5) -> list[str]:
     for d in docs:
         meta = getattr(d, "metadata", {}) or {}
         title = _title_from_meta(meta)
-        clause = meta.get("clause"); section = meta.get("section")
+        clause = meta.get("clause")
+        section = meta.get("section")
         page = meta.get("page") if isinstance(meta.get("page"), int) else None
         if not clause and not section:
             fc, fs = _fallback_clause_section(d.page_content)
-            clause = clause or fc; section = section or fs
+            clause = clause or fc 
+            section = section or fs
         g = groups.setdefault(title, {"clauses": set(), "sections": set(), "pages": set()})
-        if clause: g["clauses"].add(clause)
-        elif section: g["sections"].add(section)
-        elif page: g["pages"].add(page)
+        if clause: 
+            g["clauses"].add(clause)
+        elif section: 
+            g["sections"].add(section)
+        elif page: 
+            g["pages"].add(page)
 
     lines = []
     for title, g in groups.items():
