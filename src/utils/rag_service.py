@@ -4,7 +4,7 @@ import re
 import time
 from collections import defaultdict
 from uuid import uuid4
-from src.utils.doc_loader import clean_text, extract_meta_from_text, normalize_title
+
 import chromadb
 import torch
 from langchain.schema import Document
@@ -14,6 +14,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import CrossEncoder
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from src.utils.doc_loader import clean_text, extract_meta_from_text, normalize_title
 
 STRIP_TAGS_RE = re.compile(r"</?system>|</?assistant>|</?user>|<\/?[^>]+>", re.IGNORECASE)
 WS_RE = re.compile(r"\s+")
