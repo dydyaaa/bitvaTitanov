@@ -1,0 +1,206 @@
+/* src/pages/ChatPage/ChatPage.module.scss */
+.chatPage {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  height: 100%; /* занимает всю высоту root */
+  width: 100%; /* занимает всю ширину root */
+  max-width: 100%; /* не больше родителя */
+  border-radius: var(--radius-xl);
+  overflow: hidden; /* предотвращает скролл самого chatPage */
+}
+
+.messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* чтобы скролился только внутренний список */
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: 32px; // нужно, чтобы инпут позиционировать внутри
+  position: relative;
+  padding-bottom: 72px;
+
+  /* отключили общий fadeIn, чтобы не перекрывал scale анимацию пузырей */
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 3; /* выше градиентных прослоек */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+
+.actionsBar {
+  display: flex;
+  gap: 8px;
+  /* убрана подложка: только группа кнопок */
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+}
+
+.userBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-hover);
+  color: var(--color-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.name {
+  opacity: 0.85;
+  font-size: var(--font-size-sm);
+}
+
+.list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+  padding-top: 12px;
+  overflow-y: auto;
+
+  /* маска применяем только к скроллируемой области, хедер вне маски */
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0,
+    rgba(0,0,0,1) 24px,
+    rgba(0,0,0,1) calc(100% - 24px),
+    rgba(0,0,0,0.2) 100%
+  );
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+
+  /* тонкий кастомный скроллбар */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+
+.list::-webkit-scrollbar {
+  width: 8px; /* толщина */
+}
+
+.list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 8px;
+  min-height: 24px; /* высота бегунка */
+}
+
+.list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+.chatInputWrapper {
+    position: absolute;
+    left: var(--space-4);
+    right: var(--space-4);
+    bottom: var(--space-4);
+}
+
+/* loader (спиннер по центру списка) */
+.loader {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 0;
+  color: var(--color-fg); /* чтобы svg подхватывал текущий цвет */
+}
+
+.loader svg {
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeOutScale {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+
+.emptyState {
+  flex: 1; /* занимает всё доступное место */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* центр по вертикали */
+  text-align: center;
+  gap: 12px;
+  animation: fadeInScale 0.4s var(--easing-standard) forwards;
+}
+
+.emptyStateExit {
+  animation: fadeOutScale 0.3s var(--easing-standard) forwards;
+}
+.emptyImage {
+  width: 180px;
+  height: auto;
+  opacity: 0.8;
+}
+
+.emptyText {
+  opacity: 0.7;
+  width: auto;
+  max-width: 320px;
+  font-size: var(--font-size-md);
+  color: var(--color-fg-muted);
+}
+

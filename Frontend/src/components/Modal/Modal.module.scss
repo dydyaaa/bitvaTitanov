@@ -1,0 +1,83 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(420px, calc(100vw - 32px));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: var(--space-4);
+  color: var(--color-fg);
+  animation: scaleIn var(--duration-base) var(--easing-standard);
+  will-change: transform;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0 0 var(--space-2) 0;
+}
+
+.desc {
+  opacity: 0.85;
+  margin-bottom: var(--space-4);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.96); }
+  to { transform: scale(1); }
+}
+
+/* Mobile bottom-sheet behavior */
+@media (max-width: 640px) {
+  .backdrop {
+    align-items: flex-end;
+  }
+
+  .modal {
+    width: calc(100% - var(--space-2) * 2); /* боковые отступы 8px */
+    max-width: 640px;
+    margin: 0 var(--space-2) var(--space-2); /* снизу 8px */
+    border-radius: var(--radius-xl);
+    gap: var(--space-4);
+    border-bottom: none;
+    padding-bottom: var(--space-4);
+    animation: scaleIn var(--duration-base) var(--easing-standard);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 2 в строку */
+    gap: var(--space-2);
+    margin-top: var(--space-6);
+  }
+
+  .actions button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center; 
+    height: 48px; /* целевая высота */
+    font-size: var(--font-size-md);
+  }
+}
+
+

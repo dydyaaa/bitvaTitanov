@@ -1,0 +1,79 @@
+.notification {
+  position: fixed;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px) scale(0.96);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-fg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+  z-index: 1100;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  max-width: 420px;
+  width: auto;
+}
+
+.show {
+  animation: slideScaleIn 0.3s var(--easing-standard) forwards;
+}
+
+.hide {
+  animation: slideScaleOut 0.3s var(--easing-standard) forwards;
+}
+
+.text {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* 📌 Анимации */
+@keyframes slideScaleIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.50);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes slideScaleOut {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.65);
+  }
+}
+
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* 📱 Адаптация для мобилок */
+@media (max-width: 640px) {
+  .notification {
+    width: calc(100% - var(--space-4) * 2);
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px) scale(0.96);
+  }
+}

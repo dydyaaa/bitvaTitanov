@@ -1,0 +1,50 @@
+@use "./styles/tokens.scss";
+
+:root {
+  font-family: var(--font-family);
+  line-height: var(--line-height-base);
+  font-weight: 400;
+
+  box-sizing: border-box;
+  color-scheme: light dark;
+  color: var(--color-fg);
+  background-color: var(--color-bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  height: 100%; /* важно для наследования высоты */
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  padding: 16px; /* ваши отступы для парящего эффекта */
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%; /* теперь наследует высоту от body */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: var(--color-fg);
+    background-color: var(--color-bg);
+  }
+}

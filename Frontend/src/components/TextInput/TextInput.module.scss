@@ -1,0 +1,28 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+label {
+  margin-bottom: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-dim);
+}
+
+.input {
+  padding: 14px 16px;
+  font-size: 16px;
+    border-radius: 8px 16px 16px 16px;
+
+  font-size: 16px;
+  border:1px solid transparent;
+  transition: border-color 0.2s;
+  background-color: var(--color-surface);
+
+  &:focus {
+    outline: none;
+    border: 1px solid var(--color-accent);
+  }
+}
