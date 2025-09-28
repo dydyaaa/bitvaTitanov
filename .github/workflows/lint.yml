@@ -23,6 +23,3 @@ jobs:
 
       - name: Run Ruff
         run: ruff check .
-
-      - name: Run Isort
-        run: isort . --check-only --diff

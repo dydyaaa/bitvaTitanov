@@ -1,0 +1,53 @@
+.wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(32px);
+  border: 1px solid var(--color-border);
+}
+
+.textarea {
+  width: 100%;
+  resize: none;
+  overflow: auto; /* когда достигаем max-height, появляется скролл */
+  min-height: 24px;
+  max-height: calc(24px * 10);
+  line-height: 24px;
+  font-size: var(--font-size-sm);
+  border: none;
+  outline: none;
+  padding: var(--space-2) 56px var(--space-2) var(--space-2); // справа отступ под круглую кнопку
+  background: transparent;
+  box-sizing: border-box;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.sendButtonWrapper {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.sendButtonWrapper :global(button) {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}

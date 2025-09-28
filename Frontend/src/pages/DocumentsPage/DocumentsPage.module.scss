@@ -1,0 +1,231 @@
+// DocumentsPage.module.scss
+.documentsPage {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  height: 100%; /* занимает всю высоту root */
+  width: 100%; /* занимает всю ширину root */
+  max-width: 100%; /* не больше родителя */
+  border-radius: var(--radius-xl);
+  overflow: hidden; /* предотвращает скролл самого chatPage */
+}
+
+.documents {
+ flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* чтобы скролился только внутренний список */
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: 32px; // нужно, чтобы инпут позиционировать внутри
+  position: relative;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.userBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.chatButton {
+  svg {
+    margin-right: var(--space-1);
+  }
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-hover);
+  color: var(--color-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.name {
+  opacity: 0.85;
+  font-size: var(--font-size-sm);
+}
+
+.actionsBar {
+  display: flex;
+  gap: 8px;
+}
+
+.content {
+  flex: flex;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0,
+    rgba(0,0,0,1) 16px,
+    rgba(0,0,0,1) calc(100% - 16px),
+    rgba(0,0,0,0.2) 100%
+  );
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+
+.content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 8px;
+  min-height: 24px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+.documentsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+  align-content: flex-start;
+}
+
+.loader {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 0;
+  color: var(--color-fg);
+}
+
+.loader svg {
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.emptyState {
+    height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* центр по вертикали */
+  text-align: center;
+  gap: 12px;
+  animation: fadeInScale 0.4s var(--easing-standard) forwards;
+}
+
+.emptyImage {
+  width: 180px;
+  height: auto;
+  opacity: 0.8;
+}
+
+.emptyText {
+  opacity: 0.7;
+  width: auto;
+  max-width: 320px;
+  font-size: var(--font-size-md);
+  color: var(--color-fg-muted);
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Мобильная адаптация
+@media (max-width: 768px) {
+
+  .documentsGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .documents {
+    padding: var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  .documentsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .headerLeft {
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: stretch;
+  }
+
+  .userBadge {
+    align-self: flex-start;
+  }
+
+  .chatButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+// Планшеты и маленькие десктопы - максимум 2 в строке
+@media (min-width: 769px) {
+  .documentsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+// Большие десктопы - тоже максимум 2 в строке
+@media (min-width: 1200px) {
+  .documentsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -18,11 +18,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # Бекенд FastAPI
+  # Бекенд FastAPI (CPU версия)
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.cpu
     container_name: chat_backend
     restart: always
     ports:

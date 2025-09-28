@@ -1,0 +1,361 @@
+// StatsPage.module.scss
+.statsPage {
+display: flex;
+  flex-direction: column;
+  position: relative;
+  height: 100%; /* занимает всю высоту root */
+  width: 100%; /* занимает всю ширину root */
+  max-width: 100%; /* не больше родителя */
+  border-radius: var(--radius-xl);
+  overflow: hidden; /* предотвращает скролл самого chatPage */
+}
+
+.stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* чтобы скролился только внутренний список */
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: 32px; // нужно, чтобы инпут позиционировать внутри
+  position: relative;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+
+  h1 {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+  align-content: flex-start;
+
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0,
+    rgba(0,0,0,1) 16px,
+    rgba(0,0,0,1) calc(100% - 16px),
+    rgba(0,0,0,0.2) 100%
+  );
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+
+.statsGrid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.statsGrid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.statsGrid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 8px;
+  min-height: 24px;
+}
+
+.statsGrid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+.statCard {
+  background: var(--color-surface);
+  border-radius: 24px;
+  padding: var(--space-6);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 500;
+    color: var(--color-fg);
+  }
+}
+
+.periodTabs {
+  display: flex;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+}
+
+.periodTab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-xl);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 48px;
+  text-align: center;
+
+  &:hover {
+    color: var(--color-fg);
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.periodTabActive {
+  background: var(--color-primary);
+  color: white;
+  
+  &:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+}
+
+.userBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+
+.actionsBar {
+  display: flex;
+  gap: 8px;
+  /* убрана подложка: только группа кнопок */
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+}
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-hover);
+  color: var(--color-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.name {
+  opacity: 0.85;
+  font-size: var(--font-size-sm);
+}
+
+.wordsCount {
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-muted);
+  opacity: 0.7;
+}
+
+.cardContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--color-fg);
+  
+  svg {
+    width: 32px;
+    height: 32px;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.usersStats {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-3);
+}
+
+.usersCount {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+
+.usersLabel {
+  font-size: var(--font-size-lg);
+  color: var(--color-fg);
+  margin-bottom: var(--space-2);
+}
+
+.lastUpdate {
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-muted);
+  opacity: 0.7;
+}
+
+.error, .empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-md);
+  text-align: center;
+  opacity: 0.7;
+}
+
+.wordsList {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.wordItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: var(--color-surface-hover);
+  }
+}
+
+.wordRank {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  min-width: 32px;
+}
+
+.wordInfo {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.word {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-fg);
+  text-transform: lowercase;
+}
+
+.frequency {
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-muted);
+  opacity: 0.7;
+}
+
+// Мобильная адаптация
+@media (max-width: 768px) {
+
+
+  .header {
+    flex-direction: row;
+    gap: var(--space-3);
+    align-items: stretch;
+
+    h1 {
+      text-align: center;
+    }
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .cardHeader {
+    flex-direction: row;
+    gap: var(--space-3);
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats {
+    padding: var(--space-2);
+  }
+
+  .statCard {
+    padding: var(--space-3);
+  }
+
+  .usersCount {
+    font-size: 2.5rem;
+  }
+
+  .periodTab {
+    padding: 6px 10px;
+    font-size: var(--font-size-xs);
+    min-width: 42px;
+  }
+}
+
+.periodTabActive {
+  background: #fff;
+  color: black;
+  
+  &:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+}

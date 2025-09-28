@@ -1,0 +1,51 @@
+# Виртуальное окружение
+venv/
+.venv/
+env/
+.env/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Логи
+*.log
+
+# Временные файлы
+.DS_Store
+Thumbs.db
+
+# ChromaDB данные (будут созданы в контейнере)
+src/chroma_db/
+
+# Документы (будут монтироваться как volume)
+src/docs/
