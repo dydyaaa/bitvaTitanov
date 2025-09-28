@@ -180,54 +180,55 @@ def load_any(path: str) -> list[Document]:
     else:
         return []
 
-
-for name in os.listdir(PDF_DIR):
-    path = os.path.join(PDF_DIR, name)
-    if not os.path.isfile(path):
-        continue
-    if not name.lower().endswith((".pdf", ".docx")):
-        continue
-
-    docs = load_any(path)
-    raw_chunks = text_splitter.split_documents(docs)
-
-    base_title = normalize_title(path)
-    for i, chunk in enumerate(raw_chunks):
-        chunk.page_content = clean_text(chunk.page_content)
-
-        if len(chunk.page_content.strip()) < MIN_CHUNK_CHARS:
+def main():
+    
+    for name in os.listdir(PDF_DIR):
+        path = os.path.join(PDF_DIR, name)
+        if not os.path.isfile(path):
+            continue
+        if not name.lower().endswith((".pdf", ".docx")):
             continue
 
+        docs = load_any(path)
+        raw_chunks = text_splitter.split_documents(docs)
 
-        chunk.metadata["chunk_id"] = str(uuid4())
-        chunk.metadata["chunk_index"] = i
-        chunk.metadata["chunk_start"] = chunk.metadata.get("start_index", None)
+        base_title = normalize_title(path)
+        for i, chunk in enumerate(raw_chunks):
+            chunk.page_content = clean_text(chunk.page_content)
 
-        chunk.metadata.setdefault("title", os.path.basename(path))
-        chunk.metadata.setdefault("page", None)
+            if len(chunk.page_content.strip()) < MIN_CHUNK_CHARS:
+                continue
 
-        chunk.metadata["doc_title"] = base_title
 
-        extra = extract_meta_from_text(chunk.page_content)
-        if extra.get("section"):
-            chunk.metadata["section"] = extra["section"]
-        if extra.get("clause"):
-            chunk.metadata["clause"] = extra["clause"]
-        if extra.get("keywords"):
-            kws = [k.strip() for k in extra["keywords"] if k and isinstance(k, str)]
-            chunk.metadata["keywords"] = ", ".join(kws) if kws else None
+            chunk.metadata["chunk_id"] = str(uuid4())
+            chunk.metadata["chunk_index"] = i
+            chunk.metadata["chunk_start"] = chunk.metadata.get("start_index", None)
 
-        all_docs.extend([chunk])
+            chunk.metadata.setdefault("title", os.path.basename(path))
+            chunk.metadata.setdefault("page", None)
 
-# --- запись в Chroma ---
-client = chromadb.PersistentClient(path=CHROMA_PATH)
-db = Chroma.from_documents(
-    documents=all_docs,
-    embedding=embeddings,
-    client=client,
-    collection_name=COLLECTION,
-)
+            chunk.metadata["doc_title"] = base_title
 
-print(f"\nЗагружено и сохранено {len(all_docs)} чанков.")
-if all_docs:
-    print("Пример метаданных первого чанка:", all_docs[0].metadata)
+            extra = extract_meta_from_text(chunk.page_content)
+            if extra.get("section"):
+                chunk.metadata["section"] = extra["section"]
+            if extra.get("clause"):
+                chunk.metadata["clause"] = extra["clause"]
+            if extra.get("keywords"):
+                kws = [k.strip() for k in extra["keywords"] if k and isinstance(k, str)]
+                chunk.metadata["keywords"] = ", ".join(kws) if kws else None
+
+            all_docs.extend([chunk])
+
+    # --- запись в Chroma ---
+    client = chromadb.PersistentClient(path=CHROMA_PATH)
+    db = Chroma.from_documents(
+        documents=all_docs,
+        embedding=embeddings,
+        client=client,
+        collection_name=COLLECTION,
+    )
+
+    print(f"\nЗагружено и сохранено {len(all_docs)} чанков.")
+    if all_docs:
+        print("Пример метаданных первого чанка:", all_docs[0].metadata)
