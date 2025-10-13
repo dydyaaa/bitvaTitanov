@@ -211,7 +211,7 @@ class RAGService:
             "Ты — ассистент по нормативным документам и технической эксплуатации железнодорожного транспорта (РЖД).\n"
             "Отвечай строго на основе переданных документов (<documents>) и истории (<history>). Не привлекай внешние знания.\n\n"
             "Формат ответа:\n"
-            "• Первая строка: краткий вывод (1–2 предложения, ≤120 слов) \n"
+            "• Первая строка: краткий вывод (1–2 предложения, ≤200 слов) \n"
             "• Далее до 5 маркеров с действиями/нормами (кратко и по делу, без лишней типографики).\n"
             "• В конце отдельным блоком добавь 'Источники:' — список вида «<Название>, п. X.Y» или «<Название>, Раздел N», если пункта нет — «стр. N».\n\n"
             "Требования:\n"
@@ -503,7 +503,7 @@ class RAGService:
         self,
         user_id: str,
         query: str,
-        k: int = 4,
+        k: int = 3,
         score_threshold: float = 0.3,
         max_new_tokens: int = None,
         min_new_tokens: int = 50
@@ -521,7 +521,7 @@ class RAGService:
 
         # 2) Получаем список документов
         t0 = time.perf_counter()
-        docs = self._search_docs(query, k=k, top_n=k, score_threshold=score_threshold)
+        docs = self._search_docs(query, k=k, top_n=k - 1, score_threshold=score_threshold)
         if not docs:
             return ("Недостаточно данных в загруженных документах для точного ответа. "
                     "Уточни запрос или добавь источник.\n\nИсточники: —")
@@ -546,62 +546,52 @@ class RAGService:
         history_str = self._format_history(user_id)
         print(f"[RAG] format_history: {time.perf_counter()-t0:.3f} s")
 
-        # 5) Сборка prompt
+    # 5) Сборка промпта
         t0 = time.perf_counter()
         sample = [
             {"role": "system",    "content": self.SYSTEM_PROMPT},
             {"role": "history",   "content": history_str},
             {"role": "documents", "content": json.dumps(formatted_docs, ensure_ascii=False)},
-            {"role": "user",      "content": query}
+            {"role": "user",      "content": query},
         ]
-        prompt = ""
-        for msg in sample:
-            prompt += f"<{msg['role']}>\n{msg['content']}\n"
-        prompt += "<assistant>\n"
+        prompt = "".join(f"<{m['role']}>\n{m['content']}\n" for m in sample) + "<assistant>\n"
         print(f"[RAG] build_prompt: {time.perf_counter()-t0:.3f} s")
-
-        # 6) Динамический max_new_tokens
+ 
+        # 6) Токенизация (ОДИН раз) + расчёт max_new_tokens c ограничением для скорости
         t0 = time.perf_counter()
+        enc = self.tokenizer(prompt, return_tensors="pt")
+        if self.device == "cuda":
+            enc = {k: v.to("cuda") for k, v in enc.items()}
+
+        curr_len = enc["input_ids"].shape[1]
+        model_max = (
+            getattr(self.model.config, "n_positions", None)
+            or getattr(self.model.config, "max_position_embeddings", None)
+            or getattr(self.tokenizer, "model_max_length", 4096)
+        )
+        available = model_max - curr_len - 64
         if max_new_tokens is None:
-            enc = self.tokenizer(prompt, return_tensors="pt")
-            curr_len = enc["input_ids"].shape[1]
-            model_max = (
-                getattr(self.model.config, "n_positions", None)
-                or getattr(self.model.config, "max_position_embeddings", None)
-                or getattr(self.tokenizer, "model_max_length", 4096)
-            )
-            available = model_max - curr_len - 64
-            max_new_tokens = max(min(available, 330), min_new_tokens)
+            # жёсткий cap для снижения латентности
+            max_new_tokens = max(min(available, 250), min_new_tokens)
         print(f"[RAG] calc_max_tokens: {time.perf_counter()-t0:.3f} s")
 
-        # 7) Генерация
+        # 7) Генерация (детерминированно, без сэмплинга)
         t0 = time.perf_counter()
-        inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
-        if self.device == "cuda":
-            inputs = {k: v.to("cuda") for k, v in inputs.items()}
-
         if self.device == "cuda":
             torch.cuda.synchronize()
-        # ------------------------------------------------------------------------------------
+
         import psutil
-        tag = "before"
-        process = psutil.Process(os.getpid())
-        ram_mb = process.memory_info().rss / 1024 ** 2
-
-        print(f"[MEM][{tag}] RAM used: {ram_mb:.2f} MB")
-
-            # видеопамять (если есть CUDA)
+        proc = psutil.Process(os.getpid())
+        print(f"[MEM][before] RAM used: {proc.memory_info().rss / 1024**2:.2f} MB")
         if torch.cuda.is_available():
-            vram_alloc = torch.cuda.memory_allocated() / 1024 ** 2
-            vram_res = torch.cuda.memory_reserved() / 1024 ** 2
-            print(f"[MEM][{tag}] VRAM allocated: {vram_alloc:.2f} MB, reserved: {vram_res:.2f} MB")
-        # -----------------------------------------------------------------------------------------
+            print(f"[MEM][before] VRAM allocated: {torch.cuda.memory_allocated()/1024**2:.2f} MB, "
+                f"reserved: {torch.cuda.memory_reserved()/1024**2:.2f} MB")
         with torch.no_grad():
             out = self.model.generate(
-                **inputs,
+                **enc,
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
-                temperature=0.1,
+                temperature=0.2,
                 top_p=0.9,
                 eos_token_id=self.tokenizer.eos_token_id,
                 pad_token_id=self.tokenizer.eos_token_id,
@@ -625,10 +615,7 @@ class RAGService:
 
         # 8) Декодирование
         t0 = time.perf_counter()
-        gen_text = self.tokenizer.decode(
-            out[0][inputs["input_ids"].shape[1]:],
-            skip_special_tokens=False
-        )
+        gen_text = self.tokenizer.decode(out[0][enc["input_ids"].shape[1]:], skip_special_tokens=False)
         if "</assistant>" in gen_text:
             gen_text = gen_text.split("</assistant>")[0]
         answer_body = gen_text.replace("</s>", "").strip()

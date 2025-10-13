@@ -27,9 +27,14 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    gpus: all
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/chatdb
       - SQLALCHEMY_DATABASE_URI=postgresql+asyncpg://postgres:postgres@db:5432/chatdb
+    env_file:
+      - ./backend/.env
     volumes:
       - ./backend/src:/app/src
       - ./backend/jsons:/app/jsons
