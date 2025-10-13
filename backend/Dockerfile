@@ -1,39 +1,32 @@
-# Используем официальный Python образ с CUDA поддержкой
-FROM nvidia/cuda:13.0.1-cudnn-devel-ubuntu24.04
+# CUDA 12.6 + cuDNN, Ubuntu 24.04
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04
 
-# Устанавливаем Python 3.12 (доступен в Ubuntu 24.04)
-RUN apt-get update && apt-get install -y \
-    python3.12 \
-    python3.12-pip \
-    python3.12-dev \
-    python3.12-venv \
-    && rm -rf /var/lib/apt/lists/*
+# Инструменты и Python 3.12 с venv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-dev python3.12-venv python3-pip \
+    build-essential curl git \
+ && rm -rf /var/lib/apt/lists/*
 
-# Создаем символическую ссылку для python
-RUN ln -s /usr/bin/python3.12 /usr/bin/python
+# Изолируем окружение
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
-
-# Копируем файлы зависимостей
 COPY requirements.txt .
+RUN python -m pip install --upgrade pip \
+ && python -m pip install --no-cache-dir -r requirements.txt
 
-# Устанавливаем зависимости из requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# PyTorch CUDA 12.4
+RUN python -m pip install --upgrade pip && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0+cu124 torchvision==0.21.0+cu124 torchaudio==2.6.0+cu124
 
-# Устанавливаем PyTorch с CUDA поддержкой вручную
-RUN python -m pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0+cu124
 
-# Копируем исходный код
 COPY . .
 
-# Создаем пользователя для безопасности
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# Непривилегированный пользователь
+RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
 USER app
 
-# Открываем порт
 EXPOSE 8000
-
-# Команда запуска
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
