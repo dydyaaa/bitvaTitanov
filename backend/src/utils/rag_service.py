@@ -572,7 +572,7 @@ class RAGService:
         available = model_max - curr_len - 64
         if max_new_tokens is None:
             # жёсткий cap для снижения латентности
-            max_new_tokens = max(min(available, 330), min_new_tokens)
+            max_new_tokens = max(min(available, 250), min_new_tokens)
         print(f"[RAG] calc_max_tokens: {time.perf_counter()-t0:.3f} s")
 
         # 7) Генерация (детерминированно, без сэмплинга)
